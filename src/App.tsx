@@ -3,7 +3,6 @@ import { FluxProvider } from './index';
 
 // Primitives for generic App level UI
 import { Reveal } from './primitives/01-reveal';
-import { FollowCursor } from './primitives/18-follow-cursor';
 import { GridPattern } from './primitives/34-grid-pattern';
 import { Particles } from './primitives/33-particles';
 import { Noise } from './primitives/35-noise';
@@ -35,14 +34,7 @@ function App() {
         <Particles quantity={40} staticity={30} ease={50} color="#0d9488" />
         <Noise opacity={0.04} />
 
-        {/* Ambient Cursor Follower */}
-        <FollowCursor lag={0.15}>
-          <div className="w-14 h-14 rounded-full border border-teal-500/40 bg-teal-400/10 pointer-events-none flex items-center justify-center -translate-x-1/2 -translate-y-1/2 z-50">
-            <div className="w-2 h-2 bg-teal-500 rounded-full" />
-          </div>
-        </FollowCursor>
-
-        {/* Floating Glass Navigation */}
+{/* Floating Glass Navigation */}
         <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-[100]">
           <Reveal from="above" delay={0.1} distance={20}>
             <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-lg px-6 py-3 rounded-full flex items-center gap-10">

@@ -1,6 +1,6 @@
 {
   "name": "@nikitph/flux-ui",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "type": "module",
   "description": "A motion-first, physics-based React component library. 40 composable primitives that turn animation from a feature into a language.",
   "keywords": [

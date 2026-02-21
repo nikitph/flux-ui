@@ -164,7 +164,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: any) => void }) {
                 <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
                     {/* Large AI demo card */}
                     <Tilt maxTilt={2} className="lg:col-span-3 bg-white rounded-[2rem] border border-slate-200/60 shadow-lg overflow-hidden relative group">
-                        <div className="absolute top-0 right-0 w-80 h-80 bg-teal-100/40 blur-[100px] rounded-full translate-x-1/3 -translate-y-1/3 pointer-events-none" />
+                        <div className="absolute top-0 right-0 w-80 h-80 bg-teal-100/40 blur-[40px] rounded-full translate-x-1/3 -translate-y-1/3 pointer-events-none" />
                         <div className="p-10 pb-0 relative z-10">
                             <div className="flex items-center gap-3 mb-6">
                                 <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
@@ -290,7 +290,7 @@ export function HomeView({ onNavigate }: { onNavigate: (tab: any) => void }) {
             <section className="w-full max-w-5xl mx-auto mb-40 relative z-20">
                 <Reveal from="below" delay={0.1}>
                     <div className="bg-white rounded-[2.5rem] p-12 border border-slate-200/60 shadow-lg relative overflow-hidden">
-                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-teal-100/20 blur-[100px] rounded-full pointer-events-none" />
+                        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[600px] h-[300px] bg-teal-100/20 blur-[40px] rounded-full pointer-events-none" />
                         <div className="relative z-10 text-center">
                             <h3 className="text-3xl font-display font-medium mb-3 text-slate-900">Interactive Dock</h3>
                             <p className="text-slate-500 mb-12 text-base">macOS-style magnification with spring physics. Hover to see it in action.</p>

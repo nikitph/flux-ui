@@ -5,6 +5,9 @@ import { useReducedMotion } from "../hooks/useReducedMotion";
 import { resolveMotion } from "../utils/resolveMotion";
 import { Slot } from "../utils/slot";
 
+// Hoist motion.create(Slot) outside the component to avoid re-creating on every render
+const MotionSlot = motion.create(Slot);
+
 export interface PresenceProps {
     children: React.ReactNode;
     enterFrom?: "below" | "above" | "left" | "right" | "scale" | "none";
@@ -61,17 +64,17 @@ export const Presence: React.FC<PresenceProps> = ({
         <AnimatePresence mode={mode} onExitComplete={onExitComplete}>
             {React.Children.map(children, (child) => {
                 if (!React.isValidElement(child)) return child;
-                const MotionChild = motion.create(Slot);
                 return (
-                    <MotionChild
+                    <MotionSlot
                         key={child.key || Math.random().toString(36)}
                         initial={initial}
                         animate={animate}
                         exit={{ ...exit, transition: exitSpring as any }}
                         transition={enterSpring}
+                        style={{ willChange: "transform, opacity" }}
                     >
                         {child}
-                    </MotionChild>
+                    </MotionSlot>
                 );
             })}
         </AnimatePresence>

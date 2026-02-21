@@ -1,4 +1,4 @@
-import React, { forwardRef } from "react";
+import React, { forwardRef, useCallback, useEffect, useRef } from "react";
 import { motion, useMotionTemplate, useMotionValue } from "motion/react";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useMergedRef } from "../hooks/useMergedRef";
@@ -17,7 +17,7 @@ export const HeroHighlight = forwardRef<HTMLDivElement, HeroHighlightProps>(
             children,
             containerClassName,
             className,
-            color = "45, 212, 191", // teal-400 equivalent typically
+            color = "45, 212, 191",
             disabled = false,
             ...props
         },
@@ -30,12 +30,58 @@ export const HeroHighlight = forwardRef<HTMLDivElement, HeroHighlightProps>(
         const mouseX = useMotionValue(0);
         const mouseY = useMotionValue(0);
 
-        function handleMouseMove({ currentTarget, clientX, clientY }: React.MouseEvent<HTMLDivElement>) {
-            if (!currentTarget) return;
-            const { left, top } = currentTarget.getBoundingClientRect();
-            mouseX.set(clientX - left);
-            mouseY.set(clientY - top);
-        }
+        // Cache rect to avoid layout thrashing on every mousemove
+        const rectRef = useRef<DOMRect | null>(null);
+        const updateRect = useCallback(() => {
+            if (internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+        }, []);
+
+        useEffect(() => {
+            updateRect();
+            window.addEventListener("scroll", updateRect, { passive: true });
+            window.addEventListener("resize", updateRect, { passive: true });
+            return () => {
+                window.removeEventListener("scroll", updateRect);
+                window.removeEventListener("resize", updateRect);
+            };
+        }, [updateRect]);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<React.MouseEvent<HTMLDivElement> | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestEvent.current;
+            if (!e) return;
+            const rect = rectRef.current;
+            if (!rect) return;
+            mouseX.set(e.clientX - rect.left);
+            mouseY.set(e.clientY - rect.top);
+        }, [mouseX, mouseY]);
+
+        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+            latestEvent.current = e;
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [processMouseMove]);
+
+        useEffect(() => {
+            return () => {
+                if (rafId.current) cancelAnimationFrame(rafId.current);
+            };
+        }, []);
+
+        const maskTemplate = useMotionTemplate`
+            radial-gradient(
+              200px circle at ${mouseX}px ${mouseY}px,
+              black 0%,
+              transparent 100%
+            )
+          `;
 
         if (disabled || isReducedMotion) {
             return (
@@ -57,20 +103,8 @@ export const HeroHighlight = forwardRef<HTMLDivElement, HeroHighlightProps>(
                 <motion.div
                     className="absolute inset-0 opacity-0 transition duration-300 group-hover:opacity-100 pointer-events-none bg-dot-thick-teal-500"
                     style={{
-                        WebkitMaskImage: useMotionTemplate`
-            radial-gradient(
-              200px circle at ${mouseX}px ${mouseY}px,
-              black 0%,
-              transparent 100%
-            )
-          `,
-                        maskImage: useMotionTemplate`
-            radial-gradient(
-              200px circle at ${mouseX}px ${mouseY}px,
-              black 0%,
-              transparent 100%
-            )
-          `,
+                        WebkitMaskImage: maskTemplate,
+                        maskImage: maskTemplate,
                     }}
                 />
                 <div className={className}>{children}</div>

@@ -27,8 +27,8 @@ function App() {
       */}
       <div className="min-h-screen bg-[#FDFDFD] text-slate-800 font-sans selection:bg-teal-200/60 overflow-x-hidden relative flex flex-col">
 
-        {/* Soft floating background glow attached to the top */}
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-teal-100/30 blur-[120px] rounded-full pointer-events-none z-0" />
+        {/* Soft floating background glow attached to the top — use opacity gradient instead of massive blur for GPU perf */}
+        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[500px] bg-teal-100/20 blur-[40px] rounded-full pointer-events-none z-0" />
 
         {/* Master Background Textures */}
         <GridPattern size={32} color="#000" fade={false} style={{ opacity: 0.03 }} />
@@ -37,7 +37,7 @@ function App() {
 
         {/* Ambient Cursor Follower */}
         <FollowCursor lag={0.15}>
-          <div className="w-14 h-14 rounded-full border border-teal-500/40 bg-teal-400/10 backdrop-blur-[3px] pointer-events-none flex items-center justify-center -translate-x-1/2 -translate-y-1/2 shadow-[0_0_30px_rgba(45,212,191,0.25)] z-50">
+          <div className="w-14 h-14 rounded-full border border-teal-500/40 bg-teal-400/10 pointer-events-none flex items-center justify-center -translate-x-1/2 -translate-y-1/2 z-50">
             <div className="w-2 h-2 bg-teal-500 rounded-full" />
           </div>
         </FollowCursor>
@@ -45,7 +45,7 @@ function App() {
         {/* Floating Glass Navigation */}
         <nav className="fixed top-6 left-1/2 -translate-x-1/2 z-[100]">
           <Reveal from="above" delay={0.1} distance={20}>
-            <div className="bg-white/80 backdrop-blur-2xl border border-slate-200/80 shadow-[0_10px_40px_rgba(0,0,0,0.06)] px-6 py-3 rounded-full flex items-center gap-10">
+            <div className="bg-white/90 backdrop-blur-md border border-slate-200/80 shadow-lg px-6 py-3 rounded-full flex items-center gap-10">
               <button
                 onClick={() => setActiveTab('home')}
                 className="font-display font-bold text-xl tracking-tight flex items-center gap-2 cursor-pointer hover:opacity-80 transition-opacity focus:outline-none"

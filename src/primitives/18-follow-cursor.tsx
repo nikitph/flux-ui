@@ -1,4 +1,4 @@
-import React, { forwardRef, useCallback, useEffect, useState } from "react";
+import React, { forwardRef, useCallback, useEffect, useRef, useState } from "react";
 import { motion, useMotionValue, useSpring } from "motion/react";
 import { PhysicsPreset } from "../config/flux.config";
 import { useReducedMotion } from "../hooks/useReducedMotion";
@@ -44,7 +44,7 @@ export const FollowCursor = forwardRef<HTMLDivElement, FollowCursorProps>(
         const internalRef = React.useRef<HTMLDivElement>(null);
         const mergedRef = useMergedRef(ref, internalRef);
 
-        // Adjust physics based on lag directly 
+        // Adjust physics based on lag directly
         const customPhysics: PhysicsPreset | any = {
             type: "spring",
             stiffness: 400 * (1 - lag),
@@ -62,29 +62,44 @@ export const FollowCursor = forwardRef<HTMLDivElement, FollowCursorProps>(
 
         const [isVisible, setIsVisible] = useState(visible && !hideOnLeave);
 
+        // Cache previous position for rotation calc to avoid .get() calls
+        const prevPos = useRef({ x: 0, y: 0 });
+
         const updatePosition = useCallback((clientX: number, clientY: number) => {
             let posX = clientX + offset.x;
             let posY = clientY + offset.y;
 
             if (containTo === "parent" && internalRef.current?.parentElement) {
                 const parentRect = internalRef.current.parentElement.getBoundingClientRect();
-                // Assuming position absolute
                 posX = clientX - parentRect.left + offset.x;
                 posY = clientY - parentRect.top + offset.y;
             }
 
             if (rotate) {
-                const dx = posX - x.get();
-                const dy = posY - y.get();
+                const dx = posX - prevPos.current.x;
+                const dy = posY - prevPos.current.y;
                 if (dx !== 0 || dy !== 0) {
                     const angle = Math.atan2(dy, dx) * (180 / Math.PI);
                     r.set(angle);
                 }
             }
 
+            prevPos.current.x = posX;
+            prevPos.current.y = posY;
             x.set(posX);
             y.set(posY);
         }, [x, y, r, rotate, offset, containTo]);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestMouse = useRef<{ x: number; y: number } | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestMouse.current;
+            if (!e) return;
+            updatePosition(e.x, e.y);
+        }, [updatePosition]);
 
         useEffect(() => {
             if (disabled || isReducedMotion) return;
@@ -92,7 +107,10 @@ export const FollowCursor = forwardRef<HTMLDivElement, FollowCursorProps>(
             const target = containTo === "viewport" ? window : (internalRef.current?.parentElement || window);
 
             const handleMouseMove = (e: MouseEvent) => {
-                updatePosition(e.clientX, e.clientY);
+                latestMouse.current = { x: e.clientX, y: e.clientY };
+                if (!rafId.current) {
+                    rafId.current = requestAnimationFrame(processMouseMove);
+                }
                 if (hideOnLeave && !isVisible) setIsVisible(visible);
             };
 
@@ -104,16 +122,17 @@ export const FollowCursor = forwardRef<HTMLDivElement, FollowCursorProps>(
                 if (hideOnLeave) setIsVisible(false);
             };
 
-            target.addEventListener("mousemove", handleMouseMove as any);
-            target.addEventListener("mouseenter", handleMouseEnter as any);
-            target.addEventListener("mouseleave", handleMouseLeave as any);
+            target.addEventListener("mousemove", handleMouseMove as any, { passive: true });
+            target.addEventListener("mouseenter", handleMouseEnter as any, { passive: true });
+            target.addEventListener("mouseleave", handleMouseLeave as any, { passive: true });
 
             return () => {
                 target.removeEventListener("mousemove", handleMouseMove as any);
                 target.removeEventListener("mouseenter", handleMouseEnter as any);
                 target.removeEventListener("mouseleave", handleMouseLeave as any);
+                if (rafId.current) cancelAnimationFrame(rafId.current);
             };
-        }, [disabled, isReducedMotion, containTo, updatePosition, hideOnLeave, visible, isVisible]);
+        }, [disabled, isReducedMotion, containTo, processMouseMove, hideOnLeave, visible, isVisible]);
 
         useEffect(() => {
             setIsVisible(visible);
@@ -139,8 +158,9 @@ export const FollowCursor = forwardRef<HTMLDivElement, FollowCursorProps>(
                     y: smoothY,
                     rotate: smoothR,
                     opacity: isVisible ? 1 : 0,
-                    pointerEvents: "none", // Cursor followers typically shouldn't block events
-                    zIndex: 50, // Usually want cursor follow to be high up
+                    pointerEvents: "none",
+                    zIndex: 50,
+                    willChange: "transform",
                     ...style,
                 }}
                 animate={{ opacity: isVisible ? 1 : 0 }}

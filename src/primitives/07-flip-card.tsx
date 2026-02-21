@@ -100,6 +100,7 @@ export const FlipCard = forwardRef<HTMLDivElement, FlipCardProps>(
                         height: "100%",
                         backfaceVisibility: "hidden",
                         transformStyle: "preserve-3d",
+                        willChange: "transform",
                     }}
                 >
                     {front}
@@ -115,6 +116,7 @@ export const FlipCard = forwardRef<HTMLDivElement, FlipCardProps>(
                         height: "100%",
                         backfaceVisibility: "hidden",
                         transformStyle: "preserve-3d",
+                        willChange: "transform",
                     }}
                 >
                     {back}

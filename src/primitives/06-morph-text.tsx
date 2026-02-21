@@ -82,9 +82,9 @@ export const MorphText = forwardRef<HTMLElement, MorphTextProps>(
                     <AnimatePresence mode="popLayout" initial={false}>
                         <motion.span
                             key={currentIndex}
-                            initial={{ opacity: 0, filter: "blur(4px)", y: 10 }}
-                            animate={{ opacity: 1, filter: "blur(0px)", y: 0 }}
-                            exit={{ opacity: 0, filter: "blur(4px)", y: -10 }}
+                            initial={{ opacity: 0, y: 10 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -10 }}
                             transition={springConfig as any}
                             style={{ display: "inline-block" }}
                         >

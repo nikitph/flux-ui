@@ -6,7 +6,7 @@ import { useMergedRef } from "../hooks/useMergedRef";
 export interface StickyScrollProps {
     content: { title: string; description: React.ReactNode; asset?: React.ReactNode }[];
     container?: React.RefObject<HTMLElement | null>;
-    physics?: any; // To align with other components, though mostly layout driven here
+    physics?: any;
     className?: string;
     style?: React.CSSProperties;
     disabled?: boolean;
@@ -36,16 +36,31 @@ export const StickyScroll = forwardRef<HTMLDivElement, StickyScrollProps>(
             offset: ["start start", "end end"]
         });
 
+        // Only update React state when section actually changes — avoids per-pixel re-renders
+        const lastSectionRef = useRef(0);
         useEffect(() => {
-            return scrollYProgress.onChange((latest) => {
+            let rafId = 0;
+            const unsubscribe = scrollYProgress.on("change", (latest) => {
                 const cardsCount = content.length;
                 const progressPerCard = 1 / cardsCount;
                 const index = Math.min(
                     Math.floor(latest / progressPerCard),
                     cardsCount - 1
                 );
-                setActiveSection(index);
+                if (index !== lastSectionRef.current) {
+                    lastSectionRef.current = index;
+                    if (!rafId) {
+                        rafId = requestAnimationFrame(() => {
+                            rafId = 0;
+                            setActiveSection(index);
+                        });
+                    }
+                }
             });
+            return () => {
+                unsubscribe();
+                if (rafId) cancelAnimationFrame(rafId);
+            };
         }, [scrollYProgress, content.length]);
 
         if (disabled || isReducedMotion) {
@@ -90,7 +105,7 @@ export const StickyScroll = forwardRef<HTMLDivElement, StickyScrollProps>(
                             <motion.h2
                                 initial={{ opacity: 0, y: 20 }}
                                 animate={{ opacity: activeSection === index ? 1 : 0, y: activeSection === index ? 0 : 20 }}
-                                style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem" }}
+                                style={{ fontSize: "2rem", fontWeight: "bold", marginBottom: "1rem", willChange: "transform, opacity" }}
                             >
                                 {item.title}
                             </motion.h2>

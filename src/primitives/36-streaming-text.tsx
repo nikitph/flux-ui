@@ -1,8 +1,6 @@
-import React, { forwardRef, useEffect, useState } from "react";
-import { motion } from "motion/react";
+import React, { forwardRef, useEffect, useRef } from "react";
 import { PhysicsPreset } from "../config/flux.config";
 import { useReducedMotion } from "../hooks/useReducedMotion";
-// resolveMotion unused
 import { useMergedRef } from "../hooks/useMergedRef";
 
 export interface StreamingTextProps {
@@ -34,51 +32,86 @@ export const StreamingText = forwardRef<HTMLSpanElement, StreamingTextProps>(
         ref
     ) => {
         const isReducedMotion = useReducedMotion();
-        const internalRef = React.useRef<HTMLSpanElement>(null);
+        const internalRef = useRef<HTMLSpanElement>(null);
         const mergedRef = useMergedRef(ref, internalRef);
-        // unused for now since streaming text uses simple intervals or tweens
-
-        const [displayedText, setDisplayedText] = useState("");
-        const [isComplete, setIsComplete] = useState(false);
+        const textNodeRef = useRef<Text | null>(null);
+        const cursorRef = useRef<HTMLSpanElement | null>(null);
+        const onCompleteRef = useRef(onComplete);
+        onCompleteRef.current = onComplete;
 
         useEffect(() => {
+            const el = internalRef.current;
+            if (!el) return;
+
             if (disabled || isReducedMotion) {
-                setDisplayedText(text);
-                setIsComplete(true);
-                onComplete?.();
+                // Show full text immediately — direct DOM manipulation, no re-render
+                if (!textNodeRef.current) {
+                    textNodeRef.current = document.createTextNode(text);
+                    el.insertBefore(textNodeRef.current, el.firstChild);
+                } else {
+                    textNodeRef.current.textContent = text;
+                }
+                if (cursorRef.current) {
+                    cursorRef.current.style.display = "none";
+                }
+                onCompleteRef.current?.();
                 return;
             }
 
-            setDisplayedText("");
-            setIsComplete(false);
+            // Initialize text node if needed
+            if (!textNodeRef.current) {
+                textNodeRef.current = document.createTextNode("");
+                el.insertBefore(textNodeRef.current, el.firstChild);
+            } else {
+                textNodeRef.current.textContent = "";
+            }
+
+            // Show cursor
+            if (cursorRef.current) {
+                cursorRef.current.style.display = "inline-block";
+            }
 
             let i = 0;
             const intervalId = setInterval(() => {
-                setDisplayedText(text.slice(0, i + 1));
+                if (textNodeRef.current) {
+                    textNodeRef.current.textContent = text.slice(0, i + 1);
+                }
                 i++;
                 if (i >= text.length) {
                     clearInterval(intervalId);
-                    setIsComplete(true);
-                    onComplete?.();
+                    // Hide cursor when complete
+                    if (cursorRef.current) {
+                        cursorRef.current.style.display = "none";
+                    }
+                    onCompleteRef.current?.();
                 }
             }, speed);
 
             return () => clearInterval(intervalId);
-        }, [text, speed, disabled, isReducedMotion, onComplete]);
+        }, [text, speed, disabled, isReducedMotion]);
 
         return (
-            <span ref={mergedRef as any} className={className} style={{ whiteSpace: "pre-wrap", ...style }} {...props}>
-                {displayedText}
-                {cursor && (!isComplete || isReducedMotion === false) && (
-                    <motion.span
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ repeat: Infinity, duration: 0.8, repeatType: "reverse" }}
-                        style={{ display: "inline-block", marginLeft: "2px", fontWeight: "bold" }}
+            <span ref={mergedRef} className={className} style={{ whiteSpace: "pre-wrap", ...style }} {...props}>
+                {/* Text node is inserted via DOM manipulation — no React state updates */}
+                {cursor && (
+                    <span
+                        ref={cursorRef}
+                        style={{
+                            display: "inline-block",
+                            marginLeft: "2px",
+                            fontWeight: "bold",
+                            animation: "flux-cursor-blink 0.8s step-end infinite",
+                        }}
                     >
                         {cursorChar}
-                    </motion.span>
+                    </span>
                 )}
+                <style>
+                    {`@keyframes flux-cursor-blink {
+                        0%, 100% { opacity: 1; }
+                        50% { opacity: 0; }
+                    }`}
+                </style>
             </span>
         );
     }

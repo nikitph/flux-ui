@@ -30,7 +30,7 @@ export const MeshGradient = forwardRef<HTMLDivElement, MeshGradientProps>(
 
         const baseStyle: React.CSSProperties = {
             position: "absolute",
-            inset: -50, // bleed edge to avoid seeing bounds during rotation
+            inset: -50,
             opacity: 0.8,
             filter: "blur(60px)",
             pointerEvents: "none",
@@ -42,6 +42,7 @@ export const MeshGradient = forwardRef<HTMLDivElement, MeshGradientProps>(
         radial-gradient(circle at 0% 0%, ${colors[3]} 0%, transparent 50%)
       `,
             backgroundSize: "200% 200%",
+            willChange: "transform",
         };
 
         return (
@@ -66,9 +67,9 @@ export const MeshGradient = forwardRef<HTMLDivElement, MeshGradientProps>(
                 <style>
                     {`
             @keyframes flux-mesh {
-              0% { background-position: 0% 0%; transform: scale(1) rotate(0deg); }
-              50% { background-position: 100% 100%; transform: scale(1.1) rotate(5deg); }
-              100% { background-position: 0% 0%; transform: scale(1) rotate(-5deg); }
+              0% { transform: scale(1) rotate(0deg); background-position: 0% 0%; }
+              50% { transform: scale(1.1) rotate(5deg); background-position: 100% 100%; }
+              100% { transform: scale(1) rotate(-5deg); background-position: 0% 0%; }
             }
           `}
                 </style>

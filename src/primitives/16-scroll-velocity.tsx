@@ -38,7 +38,6 @@ export const ScrollVelocity = forwardRef<HTMLDivElement, ScrollVelocityProps>(
         const isReducedMotion = useReducedMotion();
         const internalRef = useRef<HTMLDivElement>(null);
         const mergedRef = useMergedRef(ref, internalRef);
-        // springConfig unused
 
         if (disabled || isReducedMotion) {
             return (
@@ -56,7 +55,7 @@ export const ScrollVelocity = forwardRef<HTMLDivElement, ScrollVelocityProps>(
         const smoothedVelocity = useSpring(velocity, {
             damping: 50,
             stiffness: 400,
-        }); // Could use options.smoothing if customizing spring config
+        });
 
         const maxEffectVal = maxEffect ?? (
             effect === "blur" ? 10 :
@@ -77,14 +76,14 @@ export const ScrollVelocity = forwardRef<HTMLDivElement, ScrollVelocityProps>(
             return val;
         });
 
-        const skewY = useTransform(smoothedVelocity, (v) => {
+        const skewDeg = useTransform(smoothedVelocity, (v) => {
             if (effect !== "skew") return 0;
             const sign = Math.sign(v);
             const val = Math.min(Math.abs(v) * sensitivity * 0.1, maxEffectVal);
-            return `${sign * val}deg`;
+            return sign * val;
         });
 
-        // Custom CSS variable for explicit speed pass-down
+        // Custom CSS variable for explicit speed pass-down — direct DOM, no React state
         useEffect(() => {
             if (effect === "speed" && internalRef.current) {
                 return smoothedVelocity.on("change", (latest) => {
@@ -95,10 +94,32 @@ export const ScrollVelocity = forwardRef<HTMLDivElement, ScrollVelocityProps>(
             }
         }, [effect, smoothedVelocity, sensitivity, maxEffectVal]);
 
-        const [currentVelocity, setCurrentVelocity] = React.useState(0);
+        // For render-prop children, use direct DOM updates instead of React state
         useEffect(() => {
             if (typeof children === "function") {
-                return smoothedVelocity.on("change", setCurrentVelocity);
+                return smoothedVelocity.on("change", (latest) => {
+                    // Update a data attribute for CSS-based consumers
+                    if (internalRef.current) {
+                        internalRef.current.dataset.velocity = latest.toString();
+                    }
+                });
+            }
+        }, [children, smoothedVelocity]);
+
+        // For function children, we still need one state for initial render,
+        // but we throttle updates to avoid per-frame re-renders
+        const [currentVelocity, setCurrentVelocity] = React.useState(0);
+        const lastUpdateRef = useRef(0);
+        useEffect(() => {
+            if (typeof children === "function") {
+                return smoothedVelocity.on("change", (latest) => {
+                    const now = performance.now();
+                    // Throttle React state updates to ~30fps for render-prop pattern
+                    if (now - lastUpdateRef.current > 33) {
+                        lastUpdateRef.current = now;
+                        setCurrentVelocity(latest);
+                    }
+                });
             }
         }, [children, smoothedVelocity]);
 
@@ -110,10 +131,10 @@ export const ScrollVelocity = forwardRef<HTMLDivElement, ScrollVelocityProps>(
                     ...style,
                     filter,
                     scaleY,
+                    skewY: effect === "skew" ? skewDeg : undefined,
                     transformOrigin: direction === "y" ? "center" : "left",
-                    // Framer doesn't cleanly map skewY string like this, using standard inline style is safer
+                    willChange: "transform",
                 } as any}
-                animate={effect === "skew" ? { skewY: skewY.get() as any } : undefined}
                 {...props}
             >
                 {typeof children === "function" ? children(currentVelocity) : children}

@@ -41,7 +41,7 @@ export const ScrollProgress = forwardRef<HTMLDivElement, ScrollProgressProps>(
             container: container?.current ? container : undefined,
         });
 
-        const progress = axis === "x" ? scrollYProgress : scrollXProgress; // Note: generally scrollY controls horizontal progress bar width
+        const progress = axis === "x" ? scrollYProgress : scrollXProgress;
 
         const springProgress = useSpring(progress, {
             stiffness: 100,
@@ -85,6 +85,7 @@ export const ScrollProgress = forwardRef<HTMLDivElement, ScrollProgressProps>(
                         ...dimStyles,
                         backgroundColor: color,
                         zIndex: 9999,
+                        willChange: "transform",
                         ...style,
                     }}
                     {...props}
@@ -108,6 +109,7 @@ export const ScrollProgress = forwardRef<HTMLDivElement, ScrollProgressProps>(
                         scaleY: axis === "y" ? (scaleValue as any) : undefined,
                         transformOrigin: "0% 0%",
                         zIndex: -1,
+                        willChange: "transform",
                     }}
                 />
             </div>

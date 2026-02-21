@@ -93,7 +93,7 @@ export const Particles = forwardRef<HTMLCanvasElement, ParticlesProps>(
                 // Reset if out of bounds (simple wrap)
                 if (circle.x < -circle.size || circle.x > canvasSize.current.w + circle.size ||
                     circle.y < -circle.size || circle.y > canvasSize.current.h + circle.size) {
-                    Object.assign(circle, circleParams(), { alpha: 0 }); // reset position and alpha
+                    Object.assign(circle, circleParams(), { alpha: 0 });
                 }
             };
 
@@ -107,20 +107,34 @@ export const Particles = forwardRef<HTMLCanvasElement, ParticlesProps>(
             resizeCanvas();
             animate();
 
-            const handleMouseMove = (e: MouseEvent) => {
-                if (!internalRef.current) return;
+            // rAF-throttled mousemove to avoid flooding the mouse ref
+            let mouseRafId = 0;
+            let latestMouseEvent: MouseEvent | null = null;
+
+            const processMouseMove = () => {
+                mouseRafId = 0;
+                const e = latestMouseEvent;
+                if (!e || !internalRef.current) return;
                 const rect = internalRef.current.getBoundingClientRect();
                 mouse.current.x = e.clientX - rect.left - canvasSize.current.w / 2;
                 mouse.current.y = e.clientY - rect.top - canvasSize.current.h / 2;
             };
 
+            const handleMouseMove = (e: MouseEvent) => {
+                latestMouseEvent = e;
+                if (!mouseRafId) {
+                    mouseRafId = requestAnimationFrame(processMouseMove);
+                }
+            };
+
             window.addEventListener("resize", resizeCanvas);
-            window.addEventListener("mousemove", handleMouseMove);
+            window.addEventListener("mousemove", handleMouseMove, { passive: true });
 
             return () => {
                 window.removeEventListener("resize", resizeCanvas);
                 window.removeEventListener("mousemove", handleMouseMove);
                 if (animationFrameId.current) window.cancelAnimationFrame(animationFrameId.current);
+                if (mouseRafId) cancelAnimationFrame(mouseRafId);
             };
         }, [color, quantity, staticity, ease, disabled, isReducedMotion]);
 

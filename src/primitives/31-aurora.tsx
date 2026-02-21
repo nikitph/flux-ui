@@ -34,19 +34,6 @@ export const Aurora = forwardRef<HTMLDivElement, AuroraProps>(
 
         if (disabled) return null;
 
-        const baseStyle: React.CSSProperties = {
-            position: "absolute",
-            top: "-50%",
-            left: "-50%",
-            width: "200%",
-            height: "200%",
-            opacity,
-            mixBlendMode: blendMode,
-            filter: `blur(${blur}px)`,
-            pointerEvents: "none",
-            zIndex: 0,
-        };
-
         const gradientString = `linear-gradient(-45deg, ${colors.join(", ")})`;
 
         return (
@@ -64,18 +51,28 @@ export const Aurora = forwardRef<HTMLDivElement, AuroraProps>(
             >
                 <div
                     style={{
-                        ...baseStyle,
+                        position: "absolute",
+                        top: "-50%",
+                        left: "-50%",
+                        width: "200%",
+                        height: "200%",
+                        opacity,
+                        mixBlendMode: blendMode,
+                        filter: `blur(${blur}px)`,
+                        pointerEvents: "none",
+                        zIndex: 0,
                         background: gradientString,
                         backgroundSize: "400% 400%",
+                        willChange: "transform",
                         animation: isReducedMotion ? "none" : `flux-aurora ${speed}s ease infinite`,
                     }}
                 />
                 <style>
                     {`
             @keyframes flux-aurora {
-              0% { background-position: 0% 50%; transform: rotate(0deg); }
-              50% { background-position: 100% 50%; transform: rotate(180deg); }
-              100% { background-position: 0% 50%; transform: rotate(360deg); }
+              0% { transform: rotate(0deg) scale(1); background-position: 0% 50%; }
+              50% { transform: rotate(180deg) scale(1.05); background-position: 100% 50%; }
+              100% { transform: rotate(360deg) scale(1); background-position: 0% 50%; }
             }
           `}
                 </style>

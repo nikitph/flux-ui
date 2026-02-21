@@ -1,13 +1,20 @@
-import React, { forwardRef, useRef } from "react";
+import React, { forwardRef, useCallback, useMemo, useRef } from "react";
 import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { PhysicsPreset } from "../config/flux.config";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 // resolveMotion unused
 import { useMergedRef } from "../hooks/useMergedRef";
 
-const DockContext = React.createContext<{ mouseX: any; mouseY: any; distance: number; magnification: number; direction: "horizontal" | "vertical"; isReducedMotion: boolean | undefined }>({
-    mouseX: null,
-    mouseY: null,
+const DockContext = React.createContext<{
+    mouseX: ReturnType<typeof useMotionValue<number>>;
+    mouseY: ReturnType<typeof useMotionValue<number>>;
+    distance: number;
+    magnification: number;
+    direction: "horizontal" | "vertical";
+    isReducedMotion: boolean | undefined;
+}>({
+    mouseX: null as any,
+    mouseY: null as any,
     distance: 150,
     magnification: 1.6,
     direction: "horizontal",
@@ -47,10 +54,43 @@ const DockRoot = forwardRef<HTMLDivElement, DockProps>(
         const isReducedMotion = useReducedMotion();
         const internalRef = useRef<HTMLDivElement>(null);
         const mergedRef = useMergedRef(ref, internalRef);
-        // springConfig unused
 
         const mouseX = useMotionValue(Infinity);
         const mouseY = useMotionValue(Infinity);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<{ clientX: number; clientY: number } | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestEvent.current;
+            if (!e) return;
+            mouseX.set(e.clientX);
+            mouseY.set(e.clientY);
+        }, [mouseX, mouseY]);
+
+        const handleMouseMove = useCallback((e: React.MouseEvent) => {
+            latestEvent.current = { clientX: e.clientX, clientY: e.clientY };
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [processMouseMove]);
+
+        const handleMouseLeave = useCallback(() => {
+            mouseX.set(Infinity);
+            mouseY.set(Infinity);
+        }, [mouseX, mouseY]);
+
+        // Memoize context value
+        const contextValue = useMemo(() => ({
+            mouseX,
+            mouseY,
+            distance,
+            magnification,
+            direction,
+            isReducedMotion: false as boolean | undefined,
+        }), [mouseX, mouseY, distance, magnification, direction]);
 
         if (disabled || isReducedMotion) {
             return (
@@ -61,7 +101,7 @@ const DockRoot = forwardRef<HTMLDivElement, DockProps>(
         }
 
         return (
-            <DockContext.Provider value={{ mouseX, mouseY, distance, magnification, direction, isReducedMotion: false }}>
+            <DockContext.Provider value={contextValue}>
                 <motion.div
                     ref={mergedRef as any}
                     className={className}
@@ -72,14 +112,8 @@ const DockRoot = forwardRef<HTMLDivElement, DockProps>(
                         alignItems: "center",
                         ...style,
                     }}
-                    onMouseMove={(e) => {
-                        mouseX.set(e.clientX);
-                        mouseY.set(e.clientY);
-                    }}
-                    onMouseLeave={() => {
-                        mouseX.set(Infinity);
-                        mouseY.set(Infinity);
-                    }}
+                    onMouseMove={handleMouseMove}
+                    onMouseLeave={handleMouseLeave}
                     {...props}
                 >
                     {children}
@@ -106,9 +140,26 @@ export const DockItem = forwardRef<HTMLButtonElement, DockItemProps>(
 
         const distVar = direction === "horizontal" ? mouseX : mouseY;
 
+        // Cache rect in a ref, update via ResizeObserver for accuracy
+        const rectRef = useRef<DOMRect | null>(null);
+        React.useEffect(() => {
+            const el = itemRef.current;
+            if (!el) return;
+            const updateRect = () => { rectRef.current = el.getBoundingClientRect(); };
+            updateRect();
+            const ro = new ResizeObserver(updateRect);
+            ro.observe(el);
+            window.addEventListener("scroll", updateRect, { passive: true });
+            return () => {
+                ro.disconnect();
+                window.removeEventListener("scroll", updateRect);
+            };
+        }, []);
+
         const distanceCalc = useTransform(distVar, (val) => {
-            if (val === Infinity || !itemRef.current) return distance; // Max distance if not hovering
-            const bounds = itemRef.current.getBoundingClientRect();
+            if (val === Infinity) return distance;
+            const bounds = rectRef.current;
+            if (!bounds) return distance;
             const center = direction === "horizontal" ? bounds.x + bounds.width / 2 : bounds.y + bounds.height / 2;
             return Math.abs((val as number) - center);
         });
@@ -134,11 +185,12 @@ export const DockItem = forwardRef<HTMLButtonElement, DockItemProps>(
                 onMouseLeave={() => setIsHovered(false)}
                 style={{
                     scale,
-                    transformOrigin: direction === "horizontal" ? "bottom" : "left", // Common dock origin
+                    transformOrigin: direction === "horizontal" ? "bottom" : "left",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
                     position: "relative",
+                    willChange: "transform",
                     ...style,
                 }}
                 className={className}

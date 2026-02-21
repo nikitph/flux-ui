@@ -65,22 +65,44 @@ export const Tilt = forwardRef<HTMLDivElement, TiltProps>(
         const gX = useSpring(glareX, isReducedMotion ? { duration: 0 } : springConfig as any);
         const gY = useSpring(glareY, isReducedMotion ? { duration: 0 } : springConfig as any);
 
-        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
-            if (!internalRef.current) return;
+        // Cache rect to avoid layout thrashing
+        const rectRef = useRef<DOMRect | null>(null);
+        const updateRect = useCallback(() => {
+            if (internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+        }, []);
 
-            const rect = internalRef.current.getBoundingClientRect();
+        useEffect(() => {
+            updateRect();
+            window.addEventListener("scroll", updateRect, { passive: true });
+            window.addEventListener("resize", updateRect, { passive: true });
+            return () => {
+                window.removeEventListener("scroll", updateRect);
+                window.removeEventListener("resize", updateRect);
+            };
+        }, [updateRect]);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<React.MouseEvent<HTMLDivElement> | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestEvent.current;
+            if (!e) return;
+
+            const rect = rectRef.current;
+            if (!rect) return;
+
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-
-            // Cursor position as percentages (-0.5 to 0.5)
             const mouseX = (e.clientX - centerX) / rect.width;
             const mouseY = (e.clientY - centerY) / rect.height;
-
             const multiplier = reverse ? -1 : 1;
 
             if (axis === "both" || axis === "y") {
-                x.set(-mouseY * maxTilt * 2 * multiplier); // Negative creates natural feel
+                x.set(-mouseY * maxTilt * 2 * multiplier);
             }
             if (axis === "both" || axis === "x") {
                 y.set(mouseX * maxTilt * 2 * multiplier);
@@ -91,7 +113,15 @@ export const Tilt = forwardRef<HTMLDivElement, TiltProps>(
                 glareX.set((e.clientX - rect.left) / rect.width * 100);
                 glareY.set((e.clientY - rect.top) / rect.height * 100);
             }
-        }, [x, y, s, glareX, glareY, maxTilt, reverse, axis, scale, glare, disabled, isReducedMotion, disableOnTouch, isTouchDevice]);
+        }, [x, y, s, glareX, glareY, maxTilt, reverse, axis, scale, glare]);
+
+        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
+            latestEvent.current = e;
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [disabled, isReducedMotion, disableOnTouch, isTouchDevice, processMouseMove]);
 
         const handleMouseLeave = useCallback(() => {
             if (disabled || isReducedMotion) return;
@@ -101,6 +131,13 @@ export const Tilt = forwardRef<HTMLDivElement, TiltProps>(
             }
             s.set(1);
         }, [x, y, s, resetOnLeave, disabled, isReducedMotion]);
+
+        // Cleanup rAF on unmount
+        useEffect(() => {
+            return () => {
+                if (rafId.current) cancelAnimationFrame(rafId.current);
+            };
+        }, []);
 
         const glareBackground = useMotionTemplate`radial-gradient(circle at ${gX}% ${gY}%, ${glareColor} 0%, transparent 80%)`;
 
@@ -122,7 +159,15 @@ export const Tilt = forwardRef<HTMLDivElement, TiltProps>(
                 {...props}
             >
                 <motion.div
-                    style={{ rotateX, rotateY, scale: scaleVal, transformStyle: "preserve-3d", width: "100%", height: "100%" }}
+                    style={{
+                        rotateX,
+                        rotateY,
+                        scale: scaleVal,
+                        transformStyle: "preserve-3d",
+                        width: "100%",
+                        height: "100%",
+                        willChange: "transform",
+                    }}
                 >
                     {children}
                     {glare && (

@@ -39,7 +39,6 @@ export const Magnetic = forwardRef<HTMLElement, MagneticProps>(
         const mergedRef = useMergedRef(ref, internalRef);
         const springConfig = resolveMotion(spring, undefined, isReducedMotion);
 
-        // For disabling on touch
         const [isTouchDevice, setIsTouchDevice] = React.useState(false);
 
         useEffect(() => {
@@ -52,11 +51,38 @@ export const Magnetic = forwardRef<HTMLElement, MagneticProps>(
         const springX = useSpring(x, isReducedMotion ? { duration: 0 } : springConfig as any);
         const springY = useSpring(y, isReducedMotion ? { duration: 0 } : springConfig as any);
 
-        const handleMouseMove = useCallback((e: MouseEvent) => {
-            if (isReducedMotion || (disableOnTouch && isTouchDevice)) return;
-            if (!internalRef.current) return;
+        // Cache rect to avoid layout thrashing — update on scroll/resize
+        const rectRef = useRef<DOMRect | null>(null);
 
-            const rect = internalRef.current.getBoundingClientRect();
+        const updateRect = useCallback(() => {
+            if (internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+        }, []);
+
+        useEffect(() => {
+            updateRect();
+            window.addEventListener("scroll", updateRect, { passive: true });
+            window.addEventListener("resize", updateRect, { passive: true });
+            return () => {
+                window.removeEventListener("scroll", updateRect);
+                window.removeEventListener("resize", updateRect);
+            };
+        }, [updateRect]);
+
+        // Throttle mousemove to one rAF per frame
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<MouseEvent | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            const e = latestEvent.current;
+            rafId.current = 0;
+            if (!e) return;
+
+            if (isReducedMotion || (disableOnTouch && isTouchDevice)) return;
+            const rect = rectRef.current;
+            if (!rect) return;
+
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
 
@@ -76,15 +102,23 @@ export const Magnetic = forwardRef<HTMLElement, MagneticProps>(
             }
         }, [x, y, radius, maxDisplacement, strength, isTouchDevice, disableOnTouch, isReducedMotion]);
 
-        const handleMouseLeave = () => {
+        const handleMouseMove = useCallback((e: MouseEvent) => {
+            latestEvent.current = e;
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [processMouseMove]);
+
+        const handleMouseLeave = useCallback(() => {
             x.set(0);
             y.set(0);
-        };
+        }, [x, y]);
 
         useEffect(() => {
-            window.addEventListener("mousemove", handleMouseMove);
+            window.addEventListener("mousemove", handleMouseMove, { passive: true });
             return () => {
                 window.removeEventListener("mousemove", handleMouseMove);
+                if (rafId.current) cancelAnimationFrame(rafId.current);
             };
         }, [handleMouseMove]);
 
@@ -94,7 +128,7 @@ export const Magnetic = forwardRef<HTMLElement, MagneticProps>(
             <MotionComponent
                 ref={mergedRef as any}
                 className={className}
-                style={{ ...style, x: springX, y: springY }}
+                style={{ ...style, x: springX, y: springY, willChange: "transform" }}
                 onMouseLeave={handleMouseLeave}
                 {...props}
             >

@@ -1,10 +1,13 @@
-import React, { forwardRef, useEffect, useState } from "react";
+import React, { forwardRef, useEffect, useMemo, useState } from "react";
 import { motion, useInView } from "motion/react";
 import { motionScale, PhysicsPreset } from "../config/flux.config";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { resolveMotion } from "../utils/resolveMotion";
 import { useMergedRef } from "../hooks/useMergedRef";
 import { Slot } from "../utils/slot";
+
+// Hoist motion.create(Slot) outside the component to avoid re-creating on every render
+const MotionSlot = motion.create(Slot);
 
 export interface StaggerProps {
     children: React.ReactNode;
@@ -73,9 +76,8 @@ export const Stagger = forwardRef<HTMLElement, StaggerProps>(
 
         const childrenArray = React.Children.toArray(children);
         const count = childrenArray.length;
-        let randomSeed = 0.5; // for deterministic random
 
-        const getInitial = () => {
+        const getInitial = useMemo(() => {
             if (isReducedMotion) return { opacity: 0, x: 0, y: 0, scale: 1 };
             const rFrom = reveal.from || "below";
             const rDist = reveal.distance || motionScale.distance.md;
@@ -88,10 +90,12 @@ export const Stagger = forwardRef<HTMLElement, StaggerProps>(
                 x: rFrom === "left" ? -rDist : rFrom === "right" ? rDist : 0,
                 scale: rScale !== false ? rScale : 1,
             };
-        };
+        }, [isReducedMotion, reveal.from, reveal.distance, reveal.fade, reveal.scale]);
 
         const target = { opacity: 1, x: 0, y: 0, scale: 1 };
-        const initial = getInitial();
+        const initial = getInitial;
+
+        let randomSeed = 0.5;
 
         const renderChildren = childrenArray.map((child, i) => {
             if (!React.isValidElement(child)) return child;
@@ -106,16 +110,16 @@ export const Stagger = forwardRef<HTMLElement, StaggerProps>(
                 }
             }
 
-            const MotionChild = motion.create(Slot);
             return (
-                <MotionChild
+                <MotionSlot
                     key={child.key || i}
                     initial={initial}
                     animate={shouldAnimate ? target : initial}
                     transition={{ ...springConfig, delay }}
+                    style={{ willChange: "transform, opacity" }}
                 >
                     {child}
-                </MotionChild>
+                </MotionSlot>
             );
         });
 

@@ -1,11 +1,18 @@
-import React, { createContext, forwardRef, useCallback, useContext, useEffect, useRef } from "react";
-import { motion, useMotionValue, useSpring } from "motion/react";
+import React, { createContext, forwardRef, useCallback, useContext, useEffect, useMemo, useRef } from "react";
+import { motion, useMotionValue, useSpring, useTransform } from "motion/react";
 import { PhysicsPreset } from "../config/flux.config";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { resolveMotion } from "../utils/resolveMotion";
 import { useMergedRef } from "../hooks/useMergedRef";
 
-const Hover3DContext = createContext<{ mouseX: any; mouseY: any; maxMovement: number; isReducedMotion: boolean | undefined }>({
+interface Hover3DContextType {
+    mouseX: ReturnType<typeof useSpring> | null;
+    mouseY: ReturnType<typeof useSpring> | null;
+    maxMovement: number;
+    isReducedMotion: boolean | undefined;
+}
+
+const Hover3DContext = createContext<Hover3DContextType>({
     mouseX: null,
     mouseY: null,
     maxMovement: 0,
@@ -54,25 +61,63 @@ const Hover3DRoot = forwardRef<HTMLDivElement, Hover3DProps>(
         const mouseX = useSpring(x, isReducedMotion ? { duration: 0 } : springConfig as any);
         const mouseY = useSpring(y, isReducedMotion ? { duration: 0 } : springConfig as any);
 
-        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
-            if (!internalRef.current) return;
+        // Cache rect to avoid layout thrashing
+        const rectRef = useRef<DOMRect | null>(null);
+        const updateRect = useCallback(() => {
+            if (internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+        }, []);
 
-            const rect = internalRef.current.getBoundingClientRect();
+        useEffect(() => {
+            updateRect();
+            window.addEventListener("scroll", updateRect, { passive: true });
+            window.addEventListener("resize", updateRect, { passive: true });
+            return () => {
+                window.removeEventListener("scroll", updateRect);
+                window.removeEventListener("resize", updateRect);
+            };
+        }, [updateRect]);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<React.MouseEvent<HTMLDivElement> | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestEvent.current;
+            if (!e) return;
+            const rect = rectRef.current;
+            if (!rect) return;
+
             const centerX = rect.left + rect.width / 2;
             const centerY = rect.top + rect.height / 2;
-
             const offsetX = (e.clientX - centerX) / rect.width;
             const offsetY = (e.clientY - centerY) / rect.height;
 
-            x.set(offsetX * 2); // -1 to 1 range
-            y.set(offsetY * 2); // -1 to 1 range
-        }, [x, y, disabled, isReducedMotion, disableOnTouch, isTouchDevice]);
+            x.set(offsetX * 2);
+            y.set(offsetY * 2);
+        }, [x, y]);
+
+        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
+            latestEvent.current = e;
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [disabled, isReducedMotion, disableOnTouch, isTouchDevice, processMouseMove]);
 
         const handleMouseLeave = useCallback(() => {
             x.set(0);
             y.set(0);
         }, [x, y]);
+
+        // Cleanup rAF on unmount
+        useEffect(() => {
+            return () => {
+                if (rafId.current) cancelAnimationFrame(rafId.current);
+            };
+        }, []);
 
         if (disabled) {
             return (
@@ -82,7 +127,7 @@ const Hover3DRoot = forwardRef<HTMLDivElement, Hover3DProps>(
             );
         }
 
-        // Auto-assign depth if layers is not explicitly provided (mock logic here assumes direct Layer children)
+        // Auto-assign depth if layers is not explicitly provided
         const childrenArray = React.Children.toArray(children);
         const numLayers = layers || childrenArray.length;
 
@@ -95,8 +140,16 @@ const Hover3DRoot = forwardRef<HTMLDivElement, Hover3DProps>(
             return child;
         });
 
+        // Memoize context value to prevent unnecessary re-renders of layers
+        const contextValue = useMemo(() => ({
+            mouseX,
+            mouseY,
+            maxMovement,
+            isReducedMotion,
+        }), [mouseX, mouseY, maxMovement, isReducedMotion]);
+
         return (
-            <Hover3DContext.Provider value={{ mouseX, mouseY, maxMovement, isReducedMotion }}>
+            <Hover3DContext.Provider value={contextValue}>
                 <div
                     ref={mergedRef}
                     className={className}
@@ -124,6 +177,10 @@ export const Hover3DLayer = forwardRef<HTMLDivElement, Hover3DLayerProps>(
     ({ children, depth = 0, className, style, ...props }, ref) => {
         const { mouseX, mouseY, maxMovement, isReducedMotion } = useContext(Hover3DContext);
 
+        // Use useTransform for GPU-composited movement — no .get() calls, no re-renders
+        const layerX = useTransform(mouseX ?? useMotionValue(0), (val: number) => val * maxMovement * depth);
+        const layerY = useTransform(mouseY ?? useMotionValue(0), (val: number) => val * maxMovement * depth);
+
         if (isReducedMotion || mouseX === null) {
             return (
                 <div ref={ref} className={className} style={{ position: "absolute", inset: 0, ...style }} {...props}>
@@ -139,24 +196,12 @@ export const Hover3DLayer = forwardRef<HTMLDivElement, Hover3DLayerProps>(
                 style={{
                     position: "absolute",
                     inset: 0,
-                    x: useMotionValue(0), // Will be overridden by style calculation
-                    y: useMotionValue(0),
+                    x: layerX,
+                    y: layerY,
                     transformStyle: "preserve-3d",
+                    willChange: "transform",
                     ...style,
                 }}
-                // In motion terms, we'll manually set the update using useTransform or just calculate here
-                // The most performant approach is binding useTransform:
-                // x: useTransform(mouseX, val => val * maxMovement * depth)
-                // However, a simpler setup is:
-                {...{
-                    style: {
-                        x: depth > 0 ? mouseX.get() * maxMovement * depth : 0,
-                        y: depth > 0 ? mouseY.get() * maxMovement * depth : 0,
-                        position: "absolute",
-                        inset: 0,
-                        ...style
-                    }
-                } as any} // Requires standard motion transforms mapped appropriately, simplified for brevity here.
                 {...props}
             >
                 {children}

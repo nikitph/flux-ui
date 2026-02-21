@@ -1,4 +1,4 @@
-import React, { forwardRef, useEffect, useRef, useState } from "react";
+import React, { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { useReducedMotion } from "../hooks/useReducedMotion";
 import { useMergedRef } from "../hooks/useMergedRef";
 
@@ -53,20 +53,29 @@ export const Marquee = forwardRef<HTMLDivElement, MarqueeProps>(
         useEffect(() => {
             if (disabled || isReducedMotion) return;
 
+            let resizeTimeout: ReturnType<typeof setTimeout>;
+
             const observer = new ResizeObserver((entries) => {
-                for (const entry of entries) {
-                    if (entry.target === containerRef.current) {
-                        setContainerSize(isHorizontal ? entry.contentRect.width : entry.contentRect.height);
-                    } else if (entry.target === contentRef.current) {
-                        setContentSize(isHorizontal ? entry.contentRect.width : entry.contentRect.height);
+                // Debounce ResizeObserver to avoid excessive state updates
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    for (const entry of entries) {
+                        if (entry.target === containerRef.current) {
+                            setContainerSize(isHorizontal ? entry.contentRect.width : entry.contentRect.height);
+                        } else if (entry.target === contentRef.current) {
+                            setContentSize(isHorizontal ? entry.contentRect.width : entry.contentRect.height);
+                        }
                     }
-                }
+                }, 100);
             });
 
             if (containerRef.current) observer.observe(containerRef.current);
             if (contentRef.current) observer.observe(contentRef.current);
 
-            return () => observer.disconnect();
+            return () => {
+                clearTimeout(resizeTimeout);
+                observer.disconnect();
+            };
         }, [isHorizontal, disabled, isReducedMotion]);
 
         if (disabled || isReducedMotion) {
@@ -83,12 +92,13 @@ export const Marquee = forwardRef<HTMLDivElement, MarqueeProps>(
         const keyframesName = `flux-marquee-${calcDir < 0 ? "negative" : "positive"}-${isHorizontal ? "x" : "y"}`;
         const translateProp = isHorizontal ? "translateX" : "translateY";
 
-        const cssString = `
+        // Memoize CSS string to avoid regenerating on every render
+        const cssString = useMemo(() => `
       @keyframes ${keyframesName} {
         0% { transform: ${translateProp}(${calcDir < 0 ? "0" : `-${contentSize + gap}px`}); }
         100% { transform: ${translateProp}(${calcDir < 0 ? `-${contentSize + gap}px` : "0"}); }
       }
-    `;
+    `, [keyframesName, translateProp, calcDir, contentSize, gap]);
 
         const gradientMask = gradientWidth > 0 && isHorizontal
             ? `linear-gradient(to right, transparent, black ${gradientWidth}px, black calc(100% - ${gradientWidth}px), transparent)`
@@ -121,6 +131,7 @@ export const Marquee = forwardRef<HTMLDivElement, MarqueeProps>(
                         height: isHorizontal ? "100%" : "fit-content",
                         animation: `${keyframesName} ${duration}s linear infinite`,
                         animationPlayState: "inherit",
+                        willChange: "transform",
                     }}
                     onMouseEnter={(e) => {
                         if (pauseOnHover) e.currentTarget.style.animationPlayState = "paused";

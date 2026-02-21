@@ -58,6 +58,7 @@ export const Parallax = forwardRef<HTMLDivElement, ParallaxProps>(
                     ...style,
                     y: direction === "up" || direction === "down" ? translate : 0,
                     x: direction === "left" || direction === "right" ? translate : 0,
+                    willChange: "transform",
                 }}
                 {...props}
             >

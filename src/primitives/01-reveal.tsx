@@ -94,7 +94,7 @@ export const Reveal = forwardRef<HTMLElement, RevealProps>(
                 animate={shouldAnimate ? target : initial}
                 transition={{ ...springConfig, delay: isReducedMotion ? 0 : delay }}
                 className={className}
-                style={style}
+                style={{ ...style, willChange: "transform, opacity" }}
                 {...props}
             >
                 {children}

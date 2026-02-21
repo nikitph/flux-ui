@@ -53,14 +53,64 @@ export const Spotlight = forwardRef<HTMLDivElement, SpotlightProps>(
         const x = useSpring(mouseX, isReducedMotion ? { duration: 0 } : springConfig as any);
         const y = useSpring(mouseY, isReducedMotion ? { duration: 0 } : springConfig as any);
 
-        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
-            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
-            if (!internalRef.current) return;
+        // Cache rect to avoid layout thrashing
+        const rectRef = useRef<DOMRect | null>(null);
+        const updateRect = useCallback(() => {
+            if (internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+        }, []);
 
-            const rect = internalRef.current.getBoundingClientRect();
+        useEffect(() => {
+            updateRect();
+            window.addEventListener("scroll", updateRect, { passive: true });
+            window.addEventListener("resize", updateRect, { passive: true });
+            return () => {
+                window.removeEventListener("scroll", updateRect);
+                window.removeEventListener("resize", updateRect);
+            };
+        }, [updateRect]);
+
+        // rAF-throttled mousemove
+        const rafId = useRef<number>(0);
+        const latestEvent = useRef<React.MouseEvent<HTMLDivElement> | null>(null);
+
+        const processMouseMove = useCallback(() => {
+            rafId.current = 0;
+            const e = latestEvent.current;
+            if (!e) return;
+            const rect = rectRef.current;
+            if (!rect) return;
             mouseX.set(e.clientX - rect.left);
             mouseY.set(e.clientY - rect.top);
-        }, [mouseX, mouseY, disabled, isReducedMotion, disableOnTouch, isTouchDevice]);
+        }, [mouseX, mouseY]);
+
+        const handleMouseMove = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+            if (disabled || isReducedMotion || (disableOnTouch && isTouchDevice)) return;
+            // Update rect on first move (handles initial render before scroll/resize)
+            if (!rectRef.current && internalRef.current) {
+                rectRef.current = internalRef.current.getBoundingClientRect();
+            }
+            latestEvent.current = e;
+            if (!rafId.current) {
+                rafId.current = requestAnimationFrame(processMouseMove);
+            }
+        }, [disabled, isReducedMotion, disableOnTouch, isTouchDevice, processMouseMove]);
+
+        // Cleanup rAF on unmount
+        useEffect(() => {
+            return () => {
+                if (rafId.current) cancelAnimationFrame(rafId.current);
+            };
+        }, []);
+
+        // Cap blur to avoid expensive compositing
+        const cappedBlur = Math.min(blur, 20);
+
+        const background = useMotionTemplate`radial-gradient(${size}px circle at ${x}px ${y}px, ${color}, transparent 100%)`;
+        const borderBackground = borderColor
+            ? useMotionTemplate`radial-gradient(${size}px circle at ${x}px ${y}px, ${borderColor}, transparent 100%)`
+            : background;
 
         if (disabled || isReducedMotion) {
             return (
@@ -69,11 +119,6 @@ export const Spotlight = forwardRef<HTMLDivElement, SpotlightProps>(
                 </div>
             );
         }
-
-        const background = useMotionTemplate`radial-gradient(${size}px circle at ${x}px ${y}px, ${color}, transparent 100%)`;
-        const borderBackground = borderColor
-            ? useMotionTemplate`radial-gradient(${size}px circle at ${x}px ${y}px, ${borderColor}, transparent 100%)`
-            : background;
 
         return (
             <div
@@ -87,7 +132,7 @@ export const Spotlight = forwardRef<HTMLDivElement, SpotlightProps>(
                     <motion.div
                         style={{
                             position: "absolute",
-                            inset: -1, // Adjust based on desired border width
+                            inset: -1,
                             background: borderBackground,
                             opacity,
                             zIndex: 0,
@@ -95,6 +140,7 @@ export const Spotlight = forwardRef<HTMLDivElement, SpotlightProps>(
                             borderRadius: "inherit",
                             maskImage: "linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)",
                             maskComposite: "exclude",
+                            willChange: "background",
                         }}
                     />
                 )}
@@ -112,7 +158,8 @@ export const Spotlight = forwardRef<HTMLDivElement, SpotlightProps>(
                             pointerEvents: "none",
                             borderRadius: "inherit",
                             mixBlendMode: mode === "reveal" ? "overlay" : "normal",
-                            filter: `blur(${blur}px)`,
+                            filter: `blur(${cappedBlur}px)`,
+                            willChange: "background",
                         }}
                     />
                 )}

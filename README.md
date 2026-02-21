@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://img.shields.io/badge/FLUX_UI-v0.1.0-0d9488?style=for-the-badge&labelColor=09090b" alt="Version" />
+  <img src="https://img.shields.io/badge/FLUX_UI-v0.3.1-0d9488?style=for-the-badge&labelColor=09090b" alt="Version" />
   <img src="https://img.shields.io/badge/React-19+-61dafb?style=for-the-badge&logo=react&labelColor=09090b" alt="React 19+" />
   <img src="https://img.shields.io/badge/TypeScript-5.9-3178c6?style=for-the-badge&logo=typescript&labelColor=09090b" alt="TypeScript" />
   <img src="https://img.shields.io/badge/Tailwind_CSS-v4-06b6d4?style=for-the-badge&logo=tailwindcss&labelColor=09090b" alt="Tailwind v4" />
@@ -44,7 +44,7 @@ FLUX UI provides that language through 40 motion primitives, a unified physics e
 ### Installation
 
 ```bash
-npm install flux-ui
+npm install @nikitph/flux-ui
 ```
 
 **Peer dependencies:** `react >= 19`, `react-dom >= 19`, `motion >= 12`, `tailwindcss >= 4`
@@ -52,11 +52,11 @@ npm install flux-ui
 ### Wrap your app
 
 ```tsx
-import { FluxProvider } from "flux-ui";
+import { FluxProvider } from "@nikitph/flux-ui";
 
 function App() {
   return (
-    <FluxProvider physics="smooth" motionLevel="full">
+    <FluxProvider motionLevel="full">
       {/* your app */}
     </FluxProvider>
   );
@@ -66,15 +66,15 @@ function App() {
 ### Use a primitive
 
 ```tsx
-import { Reveal, Magnetic, HoverScale } from "flux-ui";
+import { Reveal, Magnetic, HoverScale } from "@nikitph/flux-ui";
 
 function Hero() {
   return (
-    <Reveal direction="up" stagger>
+    <Reveal from="below">
       <h1>Welcome</h1>
       <p>Motion is not a feature. It is a language.</p>
       <Magnetic strength={0.3}>
-        <HoverScale scale={1.05}>
+        <HoverScale hoverScale={1.05}>
           <button className="px-6 py-3 bg-teal-500 text-white rounded-xl">
             Get Started
           </button>
@@ -182,7 +182,7 @@ Every spring animation is driven by named physics presets — no magic numbers.
 Override per-primitive:
 
 ```tsx
-<Reveal physics="dramatic" direction="up">
+<Reveal physics="dramatic" from="below">
   <h1>Grand Entrance</h1>
 </Reveal>
 ```

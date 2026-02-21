@@ -301,7 +301,7 @@ npm run preview
 
 ## License
 
-MIT © FLUX UI
+MIT © nikitph
 
 ---
 

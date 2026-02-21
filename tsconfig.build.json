@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "skipLibCheck": true,
+    "declaration": true,
+    "declarationDir": "./dist",
+    "emitDeclarationOnly": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "verbatimModuleSyntax": false,
+    "moduleDetection": "force",
+    "erasableSyntaxOnly": true
+  },
+  "include": ["src/index.ts", "src/config", "src/context", "src/hooks", "src/utils", "src/primitives"],
+  "exclude": ["src/App.tsx", "src/main.tsx", "src/pages", "src/vite-env.d.ts"]
+}
